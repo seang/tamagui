@@ -1,5 +1,5 @@
 import { useEvent } from '@tamagui/use-event'
-import NextHead from 'next/head'
+import NextScript from 'next/script'
 import * as React from 'react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -243,50 +243,43 @@ const ThemeScript = memo(
 
     const defaultSystem = defaultTheme === 'system'
 
-    const contents = (
-      <>
-        {forcedTheme ? (
-          <script
-            // nonce={nonce}
-            key="next-themes-script"
-            dangerouslySetInnerHTML={{
-              // These are minified via Terser and then updated by hand, don't recommend
-              __html: `!function(){${optimization}${updateDOM(forcedTheme)}}()`,
-            }}
-          />
-        ) : enableSystem ? (
-          <script
-            // nonce={nonce}
-            key="next-themes-script"
-            dangerouslySetInnerHTML={{
-              __html: `!function(){try {${optimization}var e=localStorage.getItem('${storageKey}');${
-                !defaultSystem ? updateDOM(defaultTheme) + ';' : ''
-              }if("system"===e||(!e&&${defaultSystem})){var t="${MEDIA}",m=window.matchMedia(t);m.media!==t||m.matches?${updateDOM(
-                'dark'
-              )}:${updateDOM('light')}}else if(e) ${
-                value ? `var x=${JSON.stringify(value)};` : ''
-              }${updateDOM(value ? 'x[e]' : 'e', true)}}catch(e){}}()`,
-            }}
-          />
-        ) : (
-          <script
-            // nonce={nonce}
-            key="next-themes-script"
-            dangerouslySetInnerHTML={{
-              __html: `!function(){try{${optimization}var e=localStorage.getItem("${storageKey}");if(e){${
-                value ? `var x=${JSON.stringify(value)};` : ''
-              }${updateDOM(value ? 'x[e]' : 'e', true)}}else{${updateDOM(
-                defaultTheme
-              )};}}catch(t){}}();`,
-            }}
-          />
-        )}
-      </>
+    const scriptSrc = (() => {
+      if (enableSystem) {
+        return `!function(){try {${optimization}var e=localStorage.getItem('${storageKey}');${
+          !defaultSystem ? updateDOM(defaultTheme) + ';' : ''
+        }if("system"===e||(!e&&${defaultSystem})){var t="${MEDIA}",m=window.matchMedia(t);m.media!==t||m.matches?${updateDOM(
+          'dark'
+        )}:${updateDOM('light')}}else if(e) ${
+          value ? `var x=${JSON.stringify(value)};` : ''
+        }${updateDOM(value ? 'x[e]' : 'e', true)}}catch(e){}}()`
+      }
+
+      return `!function(){try{${optimization}var e=localStorage.getItem("${storageKey}");if(e){${
+        value ? `var x=${JSON.stringify(value)};` : ''
+      }${updateDOM(value ? 'x[e]' : 'e', true)}}else{${updateDOM(
+        defaultTheme
+      )};}}catch(t){}}();`
+    })()
+
+    if (skipNextHead)
+      return (
+        <script
+          // nonce={nonce}
+          key="next-themes-script"
+          dangerouslySetInnerHTML={{
+            __html: scriptSrc,
+          }}
+        />
+      )
+    const encodedScript = `data:text/javascript;base64,${encodeBase64(scriptSrc)}`
+
+    return (
+      <NextScript
+        id="next-themes-script"
+        strategy="beforeInteractive"
+        src={encodedScript}
+      />
     )
-
-    if (skipNextHead) return contents
-
-    return <NextHead>{contents}</NextHead>
   },
   (prevProps, nextProps) => {
     // Only re-render when forcedTheme changes
@@ -295,3 +288,9 @@ const ThemeScript = memo(
     return true
   }
 )
+
+const isServer = typeof window === 'undefined'
+
+const encodeBase64 = (str: string) => {
+  return isServer ? Buffer.from(str).toString('base64') : btoa(str)
+}
